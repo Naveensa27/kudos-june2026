@@ -128,4 +128,4 @@ jobs:
           name: dist
           path: dist
 
-// end of pr-gatekeeper.yml and this workflow is designed to run on pull requests targeting the main branch. It includes steps for installing dependencies, linting, testing, security scanning with CodeQL and Snyk, and building the project. Each step is dependent on the successful completion of the previous steps to ensure code quality and security before merging.
+# End of pr-gatekeeper.yml and this workflow is designed to run on pull requests targeting the main branch. It includes steps for installing dependencies, linting, testing, security scanning with CodeQL and Snyk, and building the project. Each step is dependent on the successful completion of the previous steps to ensure code quality and security before merging.
