@@ -1,31 +1,25 @@
+# GitHub Actions workflow for main branch continuous integration and deployment
 #-----------------------------------------------------------------
-# GitHub Actions Workflow: PR to Main (Quality Gate)
-#-----------------------------------------------------------------
-name: pr-gatekeeper
+name: main-ci-cd
 
 on:
-  pull_request:
+  push:
     branches:
       - main
 
 jobs:
   install:
-    name: "📦 Install dependencies"
+    name: "📦 Install Dependencies"
     runs-on: ubuntu-latest
     steps:
       - name: "🔁 Checkout"
         uses: actions/checkout@v4
 
-      - name: "⚙️ Setup Node.js"
+      - name: "⚙️ Set up Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
-
-      - name: "🧾 Diagnostics"
-        run: |
-          echo "Node:" && node -v
-          echo "NPM:" && npm -v
 
       - name: "📥 Install dependencies"
         run: npm ci
@@ -38,7 +32,7 @@ jobs:
       - name: "🔁 Checkout"
         uses: actions/checkout@v4
 
-      - name: "⚙️ Setup Node.js"
+      - name: "⚙️ Set up Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -51,14 +45,14 @@ jobs:
         run: npm run lint
 
   test:
-    name: "🧪 Test"
+    name: "🧪 Test (CI)"
     runs-on: ubuntu-latest
     needs: lint
     steps:
       - name: "🔁 Checkout"
         uses: actions/checkout@v4
 
-      - name: "⚙️ Setup Node.js"
+      - name: "⚙️ Set up Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -70,47 +64,48 @@ jobs:
       - name: "🧪 Run tests"
         run: npm run test:ci
 
-  security:
-    name: "🛡️ Security (CodeQL & Snyk)"
+  security-scan:
+    name: "🛡️ Security Scan"
     runs-on: ubuntu-latest
     needs: lint
+
     steps:
       - name: "🔁 Checkout"
         uses: actions/checkout@v4
 
-      - name: "🔐 Initialize CodeQL"
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript
+      - name: "🔐 Validate SNYK_TOKEN"
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "❌ SNYK_TOKEN secret is missing"
+            exit 1
+          fi
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      - name: "🔎 CodeQL Analyze"
-        uses: github/codeql-action/analyze@v3
-
-      - name: "🔍 Snyk Security Scan"
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      - name: "🔍 Snyk Test (Fail on vulnerabilities)"
         uses: snyk/actions/node@v1
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: test
-          
+
       - name: "📊 Snyk Monitor (Send report to dashboard)"
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }} || always()
+        if: always()
         uses: snyk/actions/node@v1
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          command: monitor    
+          command: monitor
 
   build:
     name: "🏗️ Build"
     runs-on: ubuntu-latest
-    needs: [test, security]
+    needs: [test, security-scan]
     steps:
       - name: "🔁 Checkout"
         uses: actions/checkout@v4
 
-      - name: "⚙️ Setup Node.js"
+      - name: "⚙️ Set up Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -128,4 +123,32 @@ jobs:
           name: dist
           path: dist
 
-# End of pr-gatekeeper.yml and this workflow is designed to run on pull requests targeting the main branch. It includes steps for installing dependencies, linting, testing, security scanning with CodeQL and Snyk, and building the project. Each step is dependent on the successful completion of the previous steps to ensure code quality and security before merging.
+  docker:
+    name: "🐳 Build & Push Docker Image"
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: "🔁 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "🧩 Set up QEMU"
+        uses: docker/setup-qemu-action@v2
+
+      - name: "🧰 Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      - name: "🔐 Log in to Docker Hub"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: "🚀 Build and push Docker image"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/kudos-app-26thdec:latest
+            ${{ secrets.DOCKER_USERNAME }}/kudos-app-26thdec:${{ github.sha }}
+# ------------------------------------------------
