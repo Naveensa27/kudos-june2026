@@ -179,3 +179,4 @@ jobs:
               --name kudos-app-26thdec \
               -p 80:80 \
               ${{ secrets.DOCKER_USERNAME }}/kudos-app-26thdec:latest
+#end of main-ci-cd.yml
